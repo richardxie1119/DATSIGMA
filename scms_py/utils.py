@@ -5,13 +5,15 @@ import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
+import os
+
 
 def loadBrukerFIDs(file_path, fid_length, read_length, fid_idx, verbose = False):
     """
 
     """
     fids = []
-    if path.exists(file_path):
+    if os.path.exists(file_path):
         f = open(file_path,'r')
 
         if type(fid_idx) == list or type(fid_idx) == np.ndarray:
@@ -39,17 +41,30 @@ def loadBrukerFIDs(file_path, fid_length, read_length, fid_idx, verbose = False)
                 fids.append(fid)
 
         f.close()
-    else:
-        raise Exception('ser file does not exist in the provided file path. please double check.')
 
     return np.array(fids,dtype='float64')
 
 
+
 def parseBrukerMethod(file_path):
 
-    """TODO"""
+    tree = ET.parse(file_path)
+    root = tree.getroot()
 
-    return 'A'
+    for type_tag in root.findall('paramlist')[0]:
+        name = type_tag.get('name')
+        if name == 'SW_h':
+            SW_h = float(type_tag.findall('value')[0].text)
+        if name == 'TD':
+            TD = int(type_tag.findall('value')[0].text)
+        if name == 'ML1':
+            ML1 = float(type_tag.findall('value')[0].text)
+        if name == 'ML2':
+            ML2 = float(type_tag.findall('value')[0].text)
+        if name == 'ML3':
+            ML3 = float(type_tag.findall('value')[0].text)
+
+    return {'SW_h':SW_h,'TD':TD,'ML1':ML1,'ML2':ML2,'ML3':ML3}
 
 
 def parseBrukerXML(file_path, detailed = False):
@@ -70,7 +85,7 @@ def parseBrukerXML(file_path, detailed = False):
             snr.append(float(type_tag.get('sn')))
         
     return {'intensity':np.array(intensity),'mzs':np.array(mzs),'res':np.array(res),'snr':np.array(snr)}
-    
+
 
 def parseBrukerXML_tof(file_path, detailed = False):
     

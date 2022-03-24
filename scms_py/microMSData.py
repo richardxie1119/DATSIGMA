@@ -59,6 +59,7 @@ class microMSData():
 		del Cell_imgs
 
 
+
 	def parseCellCoords(self, file_path):
 
 	    with open(file_path) as fd:

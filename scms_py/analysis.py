@@ -14,6 +14,7 @@ import umap
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.extmath import randomized_svd
 
 
 
@@ -31,7 +32,6 @@ class scMSAnalysis():
 
         """
         """
-
         intens_mtx = intens_mtx.iloc[:,intens_mtx.astype(bool).sum(axis=0).values>feat_drop_rate*intens_mtx.shape[0]]
         intens_mtx = intens_mtx.iloc[intens_mtx.astype(bool).sum(axis=1).values>cell_drop_rate*intens_mtx.shape[1],:]
 
@@ -65,16 +65,17 @@ class scMSAnalysis():
 
         self.intens_mtx = intens_mtx
 
-        if type(self.intens_mtx.columns[0]) == float:
+        if type(self.intens_mtx.columns[0]) != str:
             self.intens_mtx.columns = np.round(self.intens_mtx.columns.astype(float),4).astype(str)
 
-
-        self.metadata = self.metadata.loc[self.intens_mtx.index]
+        if self.metadata is not None:
+            self.metadata = self.metadata.loc[self.intens_mtx.index]
 
         self.adata = anndata.AnnData(self.intens_mtx)
         self.adata.var['mz'] = self.intens_mtx.columns.astype(str)
 
         print('filtered intensity matrix with shape {}'.format(self.intens_mtx.shape))
+
 
 
     def get_labels(self, labels):
@@ -94,6 +95,7 @@ class scMSAnalysis():
             self.adata.obs[label] = self.metadata[label]
 
 
+
     def analyze(self, n_pcs, n_neighbors, min_dist, resolution, labels=None, categories=['leiden'], log=False):
 
         if log:
@@ -110,7 +112,7 @@ class scMSAnalysis():
 
         print('performing clustering...')
         sc.tl.leiden(self.adata, resolution=resolution)
-
+        self.metadata['leiden'] = self.adata.obs['leiden']
 
         if labels != None:
             print('supervised umap...')
@@ -127,6 +129,79 @@ class scMSAnalysis():
             'scores':self.adata.uns['rank_genes_groups']['scores'],
             'logfoldchanges':self.adata.uns['rank_genes_groups']['logfoldchanges'],
             'pvals_adj':self.adata.uns['rank_genes_groups']['pvals_adj']}
+
+
+
+    def svd_error_analysis(self, ks, subsample=0.2):
+
+        rand_idx = random.sample(list(np.arange(0,self.intens_mtx.shape[0],1)),int(subsample*self.intens_mtx.shape[0]))
+        A_sampled = self.intens_mtx.values[rand_idx]
+        U, D, V = randomized_svd(A_sampled, n_components=np.max(ks), n_iter='auto', random_state=19)
+
+        self.singular_values = D
+
+        error_k = []
+        for k in ks:
+            proj = np.dot(U[:,:k], U[:,:k].T)
+            Ak = np.dot(proj,A_sampled)
+            error_k.append(np.linalg.norm(A_sampled - Ak, 'fro')/np.linalg.norm(A_sampled, 'fro'))
+
+        return error_k
+
+
+
+    def CX(self, k, feature_n):
+
+        lev = self.comp_lev(self.intens_mtx.values, k, 1)
+        self.lev_score = lev/k
+
+        error_n = []
+        norm_A = np.linalg.norm(self.intens_mtx.values, 'fro')
+
+        for n in feature_n:
+            C, X = self.cx_decomp(self.intens_mtx.values, self.lev_score, n)
+            error_n.append(np.linalg.norm(self.intens_mtx.values - np.dot(C,X), 'fro')/norm_A)
+
+        return error_n
+
+
+
+    def comp_lev(self, A, k, axis):
+    
+        U, D, V = randomized_svd(A, n_components=k, n_iter='auto', random_state=19)
+    
+        if axis==0:
+            lev = np.sum(U[:,:k]**2,axis=1)
+        if axis==1:
+            lev = np.sum(V[:k,:]**2,axis=0)
+        
+        return lev
+
+
+    def cx_decomp(self, A, lev, n_choose):
+        
+        lev_rank_idx = lev.argsort()[::-1]
+        
+        C = np.dot(A[:,lev_rank_idx[:n_choose]], np.diag(1/lev[:n_choose]))
+        
+        X = np.dot(np.linalg.pinv(C), A)
+        
+        return C, X
+
+
+    def cur_decomp(self, A, k, n_choose_col, n_choose_row):
+        
+        lev_col = comp_lev(A,k,1)
+        lev_row = comp_lev(A,k,0)
+
+        lev_col_idx = lev_col.argsort()[::-1]
+        lev_row_idx = lev_row.argsort()[::-1]
+        
+        C = np.dot(A[:,lev_col_idx[:n_choose_col]], np.diag(1/lev_col_idx[:n_choose_col]))
+        R = np.dot(np.diag(1/lev_row[:n_choose_row]), A[lev_row_idx[:n_choose_row],:])
+        U = np.dot( np.dot(np.linalg.pinv(C), A), np.linalg.pinv(R) )
+        
+        return C, U, R        
 
 
 
@@ -150,6 +225,7 @@ class scMSAnalysis():
         cbar.set_ticklabels(labels_unique)
 
         plt.show()
+
 
 
     def show_cellEmbed_label(self, label, classes, embed_method, size):
@@ -207,7 +283,7 @@ class scMSAnalysis():
 
 
 
-    def LipidMaps_annotate(mass_list,adducts,tolerance,site_url):
+    def LipidMaps_annotate(mass_list, adducts, tolerance, site_url):
         
         Data = []
         matched = []

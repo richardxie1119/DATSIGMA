@@ -3,8 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import sys
 import numpy as np
+import random
 import ipywidgets as widgets
 from ipywidgets import Box, IntSlider
+from sklearn.preprocessing import LabelEncoder
 
 import xgboost
 from sklearn.svm import LinearSVC
@@ -14,7 +16,8 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 
-from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.metrics import confusion_matrix, accuracy_score, roc_curve, auc, f1_score
+from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from torch.utils.data import Dataset, DataLoader
@@ -22,46 +25,158 @@ from torch.autograd import Variable
 from torch import nn
 import torch
 
+from shap import TreeExplainer, DeepExplainer, KernelExplainer, LinearExplainer
+
 class scMSModel():
 
-	def __init__(self, intens_mtx):
-
+	def __init__(self, intens_mtx, metadata=None):
+		"""
+		"""
 		self.model = {}
 		self.intens_mtx = intens_mtx
+		self.metadata = metadata
 		self.names = list(intens_mtx.index)
+		self.feature_names = list(intens_mtx.columns)
+
+		self.get_models = {'GBT':self.get_GBT_model,'RF':self.get_RF_model,
+		'SVM':self.get_SVM_model,'LR':self.get_LR_model,'LDA':self.get_LDA_model,
+		'KNN':self.get_KNN_model,'DNN':self.get_DNN_model}
+
+		self.get_explainers = {'GBT':TreeExplainer, 'RF':TreeExplainer,
+		'SVM':KernelExplainer, 'LR':LinearExplainer, 'KNN':KernelExplainer,
+		'DNN':DeepExplainer}
+
+		self.test_metrics = {}
+		self.feature_importance = {}
+
+
+	def get_labels(self, labels):
+
+		self.label_class = {}
+
+		for label in labels:
+			label_encoder = LabelEncoder()
+			integer_encoded = label_encoder.fit_transform(self.metadata[label])
+
+			self.label_class[label] = label_encoder.classes_
+			self.metadata[label+'_int'] = integer_encoded
+
+			if self.metadata[label].values.dtype == int:
+			    self.metadata[label] = self.metadata[label].astype(str)
 
 
 
-	def get_kfold_cv(self, k):
-    
-		sample_names = self.intens_mtx.index.values
-		sample_names_shuffled = shuffle(sample_names,random_state=19)
-		sample_names_kfold_test = np.array_split(sample_idx_shuffled,k)
+	def get_kfold_cv(self, k, split_by_name=None):
 
-		self.cv = sample_names_kfold_test
+		self.cv_test = []
 
-		return sample_names_kfold_test
+		if split_by_name == None:
+			#sample_names = self.intens_mtx.index.values
+			sample_names_shuffled = shuffle(self.names,random_state=39)
+			sample_names_kfold_test = np.array_split(sample_names_shuffled,k)
+			self.cv_test = sample_names_kfold_test
 
-	#def cross_val(self, model):
+		else:
+			self.split_names = self.metadata[split_by_name].unique()
+			for split_name in self.split_names:
+				self.cv_test.append(np.array(self.metadata[self.metadata[split_by_name]==split_name].index))
 
 
 
 
-	def get_gbt_model(self, learning_rate=0.1,min_split_loss=0,
+	def train_models(self, cv, model_names, label_name, shap=False, k=5, feature_names=None, split_by_name=None, learning_rate=0.001, epochs=30, batch_size=32, kwargs=None):
+
+		if cv:
+			self.get_kfold_cv(k, split_by_name)
+
+		else:
+			k = 1
+			test_names = random.sample(self.names, int(len(self.names)/4))
+			self.cv_test = [test_names]
+
+		for model_name in model_names:
+
+			k_metric = []
+			mean_abs_shap_vals = []
+			print('performing {} fold cross validation for {}'.format(len(self.cv_test),model_name))
+
+			if feature_names is not None:
+				feature_names = feature_names
+			else:
+				feature_names = self.feature_names
+
+			for i in range(len(self.cv_test)):
+
+				print('cross validation {}...'.format(i))
+				
+				train_names = list(set(self.names) - set(self.cv_test[i]))
+
+				X_train = self.intens_mtx.loc[train_names,feature_names].values.astype(float)
+				X_test = self.intens_mtx.loc[self.cv_test[i],feature_names].values.astype(float)
+				y_train = self.metadata.loc[train_names][label_name+'_int'].values.astype(int)
+				y_test = self.metadata.loc[self.cv_test[i]][label_name+'_int'].values.astype(int)
+
+				if model_name == 'DNN':
+					model = self.get_models[model_name](**kwargs)
+					losses, accuracy = self.train_DNN(X_train,y_train,learning_rate, epochs, batch_size)
+					p,pred = self.predict_DNN(X_test)
+
+				else:
+					model = self.get_models[model_name]()
+					model.fit(X_train,y_train)
+					pred = model.predict(X_test)
+
+				k_metric.append({'f1':f1_score(pred, y_test,average='micro')})
+
+				if shap:
+					shap_val = self.get_shap_vals(X_train, X_test, model_name)
+					if len(shap_val) >1:
+						shap_val = np.concatenate(shap_vals)
+				mean_abs_shap_vals.append(abs(shap_val))
+
+			self.feature_importance[model_name] = np.array(shap_vals).mean(0)
+			self.test_metrics[model_name] = k_metric
+
+
+
+	def feature_selection(self, model_name, n_eliminate):
+
+	 	
+
+
+	def get_shap_vals(self, X, X_shap, model_name):
+
+		explainer = self.get_explainers[model_name]
+		model = self.model[model_name]
+
+		if model_name == 'DNN':
+			e = explainer(model, Variable(torch.from_numpy(X).float()))
+			shap_values = e.shap_values(Variable(torch.from_numpy(X_shap).float()))
+		else:
+			e = explainer(model, X)
+			shap_values = e.shap_values(X_shap)
+
+		return shap_values
+
+
+
+	def get_GBT_model(self, learning_rate=0.1,min_split_loss=0,
 	              max_depth=6, n_estimators=300,
 	              reg_lambda=1,reg_alpha=1,subsample=1):
-
+		"""
+		"""
 
 		model = xgboost.XGBClassifier(learning_rate=learning_rate,
 		                              min_split_loss=min_split_loss,max_depth=max_depth,
 		                              n_estimators=n_estimators,
 		                              reg_lambda=reg_lambda,reg_alpha=reg_alpha,
 		                              subsample=subsample,use_label_encoder=False,n_jobs=8)
-		self.model['gbt'] = model
+		self.model['GBT'] = model
 		return model
 
 
-	def get_rf_model(self, n_estimators=300, criterion='gini',
+
+	def get_RF_model(self, n_estimators=300, criterion='gini',
 	             max_depth=None, min_samples_split=2,
 	             min_samples_leaf=1, min_weight_fraction_leaf=0.0,
 	             max_features='auto', max_leaf_nodes=None,max_samples=None):
@@ -71,15 +186,15 @@ class scMSModel():
 		                               min_samples_leaf=min_samples_leaf, min_weight_fraction_leaf=min_weight_fraction_leaf,
 		                               max_features=max_features, max_leaf_nodes=max_leaf_nodes,
 		                               max_samples=None, random_state=19, n_jobs=8)
-		self.model['rf'] = model
+		self.model['RF'] = model
 		return model
 
 
-	def get_svm_model(self, kernel, C):
+	def get_SVM_model(self, kernel='linear', C=1, max_iter=1e4):
 
-		model = SVC(kernel=kernel,C=C, random_state=19)
+		model = SVC(kernel=kernel,C=C, max_iter=max_iter, random_state=19)
 
-		self.model['svm'] = model
+		self.model['SVM'] = model
 		return model
 
 
@@ -94,7 +209,7 @@ class scMSModel():
 		return model
 
 
-	def get_LDA_model(self,):
+	def get_LDA_model(self):
 
 		model = LinearDiscriminantAnalysis()
 
@@ -123,7 +238,7 @@ class scMSModel():
 
 
 
-	def train_DNN(self, X_train, y_train, learning_rate=0.001, epochs=30, batch_size=32):
+	def train_DNN(self, X_train, y_train, learning_rate=0.001, epochs=30, batch_size=32, verbose=True):
 
 		trainset = dataset(X_train,y_train)
 		#DataLoader
@@ -153,9 +268,11 @@ class scMSModel():
 				#accuracy
 				predicted = self.model['DNN'](torch.tensor(X_train, dtype=torch.float32))
 				if self.layer_shapes[-1] >1:
-					__, predicted = torch.max(predicted, dim = 1)
+					__, predicted_labels = torch.max(predicted, dim = 1)
+				else:
+					predicted_labels = predicted.reshape(-1).round()
 
-				acc = (predicted.reshape(-1).detach().numpy().round() == y_train).mean()
+				acc = (predicted_labels.detach().numpy() == y_train).mean()
 				#backprop
 				optimizer.zero_grad()
 				loss.backward()
@@ -164,9 +281,23 @@ class scMSModel():
 			losses.append(loss)
 			accuracy.append(acc)
 
-			print("epoch {}\tloss : {}\t accuracy : {}".format(i,loss,acc))
+			if verbose:
+				if i % 5 ==0:
+					print("epoch {}\tloss : {}\t accuracy : {}".format(i,loss,acc))
 
 		return losses, accuracy
+
+
+	def predict_DNN(self, X_test):
+
+		predicted = self.model['DNN'](torch.tensor(X_test, dtype=torch.float32))
+
+		if self.layer_shapes[-1] >1:
+			__, predicted_labels = torch.max(predicted, dim = 1)
+		else:
+			predicted_labels = predicted.reshape(-1).round()
+
+		return predicted.detach().numpy(), predicted_labels.detach().numpy()
 
 
 
@@ -190,6 +321,7 @@ class Net(nn.Module):
 	def __init__(self,layer_shapes):
 
 		super(Net,self).__init__()
+
 		self.layers = nn.ModuleList()
 		self.layer_shapes = layer_shapes
 
@@ -204,6 +336,5 @@ class Net(nn.Module):
 	    	x = self.layers[-1](x)
 	    else:
 	    	x = torch.sigmoid(self.layers[-1](x))
-
 
 	    return x

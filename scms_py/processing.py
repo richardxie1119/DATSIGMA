@@ -101,7 +101,7 @@ def peak_detection(mz, spec, prominence, threshold):
     # mzs_sorted = mzs[np.argsort(mzs)]
     # intensity_sorted = spec[foundpeaks[0]][np.argsort(mzs)]
 
-    return {'mz':mz[foundpeaks[0]], 'intensity':spec[foundpeaks[0]],'tic':tic,'mz_index':foundpeaks[0]}
+    return {'mzs':mz[foundpeaks[0]], 'intensity':spec[foundpeaks[0]],'tic':tic,'mz_index':foundpeaks[0]}
 
 
 

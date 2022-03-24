@@ -13,23 +13,27 @@ import random
 from joblib import Parallel, delayed
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
+from scipy.stats import median_absolute_deviation as mad
+import matplotlib.pyplot as plt
 
 
 class scMSData():
 
     """
     """
-
     def __init__(self):
 
         self.parameters = {}    #load parameter file stored as .json
         self.spectra = {}       #raw spectra
+        self.peak_list = {}
         self.coords = []        #cell x,y coordinates, e.g. tuple(71232, 10321)
         self.random_state = 19
         self.use_index = []
 
 
     def getXMLPath(self, path):
+        """
+        """
 
         file_paths = []
         for root, dirs, files in os.walk(path):
@@ -44,21 +48,23 @@ class scMSData():
 
 
     def loadXMLData(self):
-
-        self.peak_list = {}    #list of centroided peak features for the spectra
+        """
+        """
 
         for i in tqdm(range(len(self.file_paths))):
             self.peak_list[self.names[i]] = parseBrukerXML(self.file_paths[i])
 
-    def loadXMLData_tof(self):
 
-        self.peak_list = {}    #list of centroided peak features for the spectra
+    def loadXMLData_tof(self):
 
         for i in tqdm(range(len(self.file_paths))):
             self.peak_list[self.names[i]] = parseBrukerXML_tof(self.file_paths[i])
 
 
+
     def getIntensMtxData(self, mz_range, feature_n, ppm=2, from_imzml=True, mz_features=[], intens_array=np.array([])):
+        """
+        """
 
         if from_imzml:
 
@@ -75,11 +81,24 @@ class scMSData():
         self.intens_mtx = intens_mtx
 
 
+
+    def loadPeakList(self, file_name):
+
+        with open(file_name, "rb") as file:
+            self.peak_list=pickle.load(file)
+        
+        self.names = list(self.peak_list.keys())
+
+
+    
     def loadimzMLData(self, file_name):
 
         self.imzML_dataset = inMemoryIMS(file_name)
 
+
     def convertPeak2imzML(self, file_name):
+        """
+        """
 
         coords = [tuple([1,i]) for i in range(len(self.names))]
         pklist2imzML(self.peak_list, file_name, coords)
@@ -87,36 +106,79 @@ class scMSData():
         self.loadimzMLData(file_name+'.imzML')
 
 
-    def experimentInfo(self, file_dict_path):
-
-            """
-            """
-            with open(file_dict_path, 'r') as fp:
-                path_dict = json.load(fp)
-
-            self.loadParams(path_dict['parameter_file_path'])       #load data parameters
-            self.imaginginfo_HR = parseImagingInfo(path_dict['imaging_info_path_HR'])     #load imaging experiment information
-            self.ser_file_path_HR = path_dict['ser_file_path_HR']
-
-            
-    def loadParams(self, parameter_file_path):
+    def getParams(self, method_file_path):
 
         """
         """
+        parameters = parseBrukerMethod(method_file_path)
 
-        with open(parameter_file_path, 'r') as fp:
-            self.parameters = json.load(fp)
+        T = 1/(parameters['SW_h']*2)
+        t = np.arange(0, parameters['TD'])*T
+        f = parameters['SW_h']*2*np.arange(0, parameters['TD']/2+1)/parameters['TD']
+        m = fticr_mass_axis(f, [parameters['ML1'],parameters['ML2'],parameters['ML3']])
 
-        self.parameters['T'] = 1/self.parameters['sw_h']
-        self.parameters['t'] = np.arange(0, self.parameters['fid_length_HR'])*self.parameters['T']
-        self.parameters['f'] = self.parameters['sw_h']*np.arange(0, self.parameters['fid_length_HR']/2+1)/self.parameters['fid_length_HR']
-        self.parameters['m'] = fticr_mass_axis(self.parameters['f_HR'], self.parameters['CALIB'])
-
-
-        print('loaded parameters for the experiment...')
-        print(self.parameters)
+        return {'parameters':parameters,'T':T,'t':t,'f':f,'m':m}
 
 
+    def loadICRData(self, path, method_file_path=None):
+        """
+        """
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if file.endswith("apexAcquisition.method"):
+                    method_file_path = os.path.join(root, file)
 
 
+        if method_file_path == None:
+            params = None
+            fid = np.array([])
+        else: 
+            params = self.getParams(method_file_path)
+            fid = loadBrukerFIDs(path+'/ser', params['parameters']['TD'],'all', 1)
 
+        return params, fid
+
+
+    def getICRSpectra(self, path, mz_range):
+
+        params, fid = self.loadICRData(path)
+
+        if fid.size >0:
+            mz, sp = fid2spec(fid, params['m'], mz_range)
+        else:
+            mz = np.array([])
+            sp = np.array([])
+
+        return mz, sp
+
+
+    def processICRData(self, paths, mz_range, return_peak = True, prominence_multiplier = 5, thres_multipier = 5):
+        """
+        """
+        self.names = []
+
+        for i in tqdm(range(len(paths))):
+            path = paths[i]
+            mz, sp = self.getICRSpectra(path, mz_range)
+
+            if sp.size > 0:
+                if return_peak:
+                    MAD = mad(sp[0])
+                    peak_list = peak_detection(mz, sp[0], prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+
+                    self.peak_list[path] = peak_list
+                    self.names.append(path)
+
+
+    def show_ICRSpectra(self, path, mz_low, mz_high, peak_centroid = True):
+
+        plt.close()
+
+        plt.figure(figsize=(8,4))
+        mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high))
+        plt.plot(mz, sp[0])
+
+        if peak_centroid:
+            plt.stem(self.peak_list[path]['mzs'], self.peak_list[path]['intensity'],
+             markerfmt=' ', basefmt=' ', linefmt='r')
+        plt.show()
