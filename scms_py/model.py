@@ -36,7 +36,7 @@ class scMSModel():
 		self.intens_mtx = intens_mtx
 		self.metadata = metadata
 		self.names = list(intens_mtx.index)
-		self.feature_names = list(intens_mtx.columns)
+		self.feature_names = np.array(intens_mtx.columns)
 
 		self.get_models = {'GBT':self.get_GBT_model,'RF':self.get_RF_model,
 		'SVM':self.get_SVM_model,'LR':self.get_LR_model,'LDA':self.get_LDA_model,
@@ -83,8 +83,8 @@ class scMSModel():
 
 
 
-
-	def train_models(self, cv, model_names, label_name, shap=False, k=5, feature_names=None, split_by_name=None, learning_rate=0.001, epochs=30, batch_size=32, kwargs=None):
+	def train_models(self, cv, model_names, label_name, shap=False, k=5, feature_names=None,
+					 split_by_name=None, learning_rate=0.001, epochs=30, batch_size=32, kwargs=None):
 
 		if cv:
 			self.get_kfold_cv(k, split_by_name)
@@ -97,7 +97,7 @@ class scMSModel():
 		for model_name in model_names:
 
 			k_metric = []
-			mean_abs_shap_vals = []
+			abs_shap_vals = []
 			print('performing {} fold cross validation for {}'.format(len(self.cv_test),model_name))
 
 			if feature_names is not None:
@@ -108,7 +108,7 @@ class scMSModel():
 			for i in range(len(self.cv_test)):
 
 				print('cross validation {}...'.format(i))
-				
+
 				train_names = list(set(self.names) - set(self.cv_test[i]))
 
 				X_train = self.intens_mtx.loc[train_names,feature_names].values.astype(float)
@@ -117,7 +117,8 @@ class scMSModel():
 				y_test = self.metadata.loc[self.cv_test[i]][label_name+'_int'].values.astype(int)
 
 				if model_name == 'DNN':
-					model = self.get_models[model_name](**kwargs)
+					layer_shapes = [X_train.shape[1]]+kwargs['layer_shapes']
+					model = self.get_models[model_name](layer_shapes)
 					losses, accuracy = self.train_DNN(X_train,y_train,learning_rate, epochs, batch_size)
 					p,pred = self.predict_DNN(X_test)
 
@@ -130,18 +131,38 @@ class scMSModel():
 
 				if shap:
 					shap_val = self.get_shap_vals(X_train, X_test, model_name)
-					if len(shap_val) >1:
-						shap_val = np.concatenate(shap_vals)
-				mean_abs_shap_vals.append(abs(shap_val))
+					if type(shap_val) is list:
+						shap_val = np.concatenate(shap_val)
+					abs_shap_vals.append(abs(shap_val))
+			if shap:
+				self.feature_importance[model_name] = np.concatenate(abs_shap_vals).mean(0)
 
-			self.feature_importance[model_name] = np.array(shap_vals).mean(0)
 			self.test_metrics[model_name] = k_metric
 
 
 
-	def feature_selection(self, model_name, n_eliminate):
+	def feature_selection(self, n_eliminate, model_name, kwargs, max_feat=None, min_feat=None):
 
-	 	
+		self.feature_retain = []
+		self.feature_retain_metric = []
+
+		self.train_models(**kwargs)
+		feature_rank = np.argsort(self.feature_importance[model_name])[::-1]
+		self.feature_retain.append(self.feature_names[feature_rank])
+		self.feature_retain_metric.append(self.test_metrics.copy())
+
+		feature_nums = np.arange(min_feat,max_feat,n_eliminate)[::-1]
+
+		for i, feat_num in enumerate(feature_nums):
+
+			print('now testing {} features..'.format(feat_num))
+
+			feature_use = self.feature_retain[i][feature_rank[:feat_num]]
+			self.train_models(feature_names=feature_use, **kwargs)
+			feature_rank = np.argsort(self.feature_importance[model_name])[::-1]
+			self.feature_retain.append(feature_use)
+			self.feature_retain_metric.append(self.test_metrics.copy())
+
 
 
 	def get_shap_vals(self, X, X_shap, model_name):
@@ -173,7 +194,6 @@ class scMSModel():
 		                              subsample=subsample,use_label_encoder=False,n_jobs=8)
 		self.model['GBT'] = model
 		return model
-
 
 
 	def get_RF_model(self, n_estimators=300, criterion='gini',
@@ -238,7 +258,7 @@ class scMSModel():
 
 
 
-	def train_DNN(self, X_train, y_train, learning_rate=0.001, epochs=30, batch_size=32, verbose=True):
+	def train_DNN(self, X_train, y_train, learning_rate=0.001, epochs=30, batch_size=32, verbose=False):
 
 		trainset = dataset(X_train,y_train)
 		#DataLoader
