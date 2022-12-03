@@ -27,3 +27,6 @@ The repository contains:
 - [single vesicle classifications](https://github.com/richardxie1119/DATSIGMA/blob/main/tutorial/vesicle_classification.ipynb)
 - [analysis of cells of developing brain](https://github.com/richardxie1119/DATSIGMA/blob/main/tutorial/developing_brain.ipynb)
 - [20,000 single aplysia neurons from six types of ganglia](https://github.com/richardxie1119/DATSIGMA/blob/main/tutorial/supervised_aplysia.ipynb)
+
+## Data availability
+Raw high-resolution FTMS data are available upon request due to large size. Processed data sets are available at:
