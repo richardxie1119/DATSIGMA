@@ -8,6 +8,7 @@
 ## What's included
 This is the code repository containing the data-driven and machine learning based framework for image-guided single-cell MS data processing and interpretation.
 
+
 ## Dependencies
 - Numpy >=1.19.2
 - Scipy >=1.6.2
@@ -15,10 +16,19 @@ This is the code repository containing the data-driven and machine learning base
 - PyTorch ==1.4.0
 - Spike (FTMS processing): https://github.com/spike-project/spike
 
+## Installation via Anaconda (recommended)
+```
+cd DATSIGMA
+conda env create -f environment.yml
+conda activate datsigma
+conda install -c anaconda ipykernel
+python -m ipykernel install --user --name=datsigma
+```
+
 The repository contains:
-- Signal, image, and MS data preprocessing modules.
-- Unsupervised analysis modules.
-- Machine learning modules.
+- [ ] Signal, image, and MS data preprocessing modules.
+- [ ] Unsupervised analysis modules.
+- [ ] Machine learning modules.
 
 ## Interactive demos
 - [processing 30,000 single cells raw high-resolution MS data](https://github.com/richardxie1119/DATSIGMA/blob/main/tutorial/reanalysis_30k_raw.ipynb)
