@@ -17,13 +17,11 @@ This is the code repository containing the data-driven and machine learning base
 - Spike (FTMS processing): https://github.com/spike-project/spike
 
 ## Installation via Anaconda (recommended)
-```
-cd DATSIGMA
-conda env create -f environment.yml
-conda activate datsigma
-conda install -c anaconda ipykernel
-python -m ipykernel install --user --name=datsigma
-```
+1. First nevigate into the directory: `cd DATSIGMA`
+2. Create conda virtual env: `conda env create -f environment.yml`
+3. Activate virtual env: `conda activate datsigma`
+4. Install Jupyter Notebook: `conda install -c anaconda ipykernel`
+5. Add virtual env to kernel: `python -m ipykernel install --user --name=datsigma`
 
 The repository contains:
 - [ ] Signal, image, and MS data preprocessing modules.
