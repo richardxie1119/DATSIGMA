@@ -1,0 +1,28 @@
+name: datsigma
+channels:
+  - conda-forge
+
+dependencies:
+  - h5py
+  - hdf5
+  - pandas
+  - python=3.8
+  - yaml
+  - matplotlib
+  - seaborn
+  - numpy
+  - pip
+  - scipy==1.6.2
+  - scikit-learn==1.1.2 
+  - tqdm
+  - numpy==1.19.2
+  - requests
+  - ipywidgets
+  - pip:
+    - torch==1.4.0
+    - spike-py
+    - pyimzml
+    - pyMSpec
+    - tables
+    - anndata
+    - scanpy==1.8.1
