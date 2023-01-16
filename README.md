@@ -37,4 +37,4 @@ The repository contains:
 - [20,000 single aplysia neurons from six types of ganglia](https://github.com/richardxie1119/DATSIGMA/blob/main/tutorial/supervised_aplysia.ipynb)
 
 ## Data availability
-Raw high-resolution FTMS data are available upon request due to large size. Processed data sets are available at:
+Raw high-resolution FTMS data are available upon request due to large size. Processed data sets are available at [Illinois Data Bank](https://doi.org/10.13012/B2IDB-7302959_V1)
