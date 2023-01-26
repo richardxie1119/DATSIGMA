@@ -3,7 +3,7 @@
 
 
 ## What's included
-This is the code repository containing the data-driven and machine learning based framework for image-guided single-cell MS data processing and interpretation.
+This is the code repository containing the data-driven and machine learning based framework for image-guided single-cell MS data processing and interpretation, described in this paper: https://pubs.acs.org/doi/10.1021/acs.jproteome.2c00714.
 
 
 <p align="center">
