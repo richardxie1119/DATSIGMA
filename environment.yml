@@ -19,10 +19,12 @@ dependencies:
   - requests
   - ipywidgets
   - pip:
-    - torch==1.4.0
+    - torch==1.7.1
     - spike-py
     - pyimzml
     - pyMSpec
     - tables
     - anndata
+    - xgboost
+    - shap
     - scanpy==1.8.1
