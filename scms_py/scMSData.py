@@ -29,6 +29,8 @@ class scMSData():
         self.coords = []        #cell x,y coordinates, e.g. tuple(71232, 10321)
         self.random_state = 19
         self.use_index = []
+        self.file_paths = []
+        self.names = []
 
 
     def getXMLPath(self, path):
@@ -41,24 +43,28 @@ class scMSData():
                 if file.endswith(".xml"):
                      file_paths.append(os.path.join(root, file))
 
-        self.file_paths = file_paths
-        self.names = [file_path.split('/')[-1].split('.')[0] for file_path in file_paths]
+        self.file_paths += file_paths
+        self.names += [file_path.split('/')[-1].split('.')[0] for file_path in file_paths]
 
         return file_paths
 
 
-    def loadXMLData(self):
+    def loadXMLData(self,detailed=False):
         """
         """
 
         for i in tqdm(range(len(self.file_paths))):
-            self.peak_list[self.names[i]] = parseBrukerXML(self.file_paths[i])
+            peak_data = parseBrukerXML(self.file_paths[i], detailed)
+            if len(peak_data['mzs']) >0:
+                self.peak_list[self.names[i]] = peak_data
+
+        self.names = list(self.peak_list.keys())
 
 
-    def loadXMLData_tof(self):
+    def loadXMLData_tof(self,detailed=False):
 
         for i in tqdm(range(len(self.file_paths))):
-            self.peak_list[self.names[i]] = parseBrukerXML_tof(self.file_paths[i])
+            self.peak_list[self.names[i]] = parseBrukerXML_tof(self.file_paths[i], detailed)
 
 
 
@@ -152,6 +158,24 @@ class scMSData():
         return mz, sp
 
 
+    def processICRData_solarix(self, paths, mz_range, thres, centroid):
+        """
+        """
+        self.names = []
+
+        for i in tqdm(range(len(paths))):
+            path = paths[i]
+            mz, sp = self.getICRSpectra(path, mz_range)
+
+            if sp.size > 0:
+                if return_peak:
+                    MAD = mad(sp[0])
+                    peak_list = peak_detection(mz, sp[0], prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+
+                    self.peak_list[path] = peak_list
+                    self.names.append(path)
+
+
     def processICRData(self, paths, mz_range, return_peak = True, prominence_multiplier = 5, thres_multipier = 5):
         """
         """
@@ -179,6 +203,8 @@ class scMSData():
         plt.plot(mz, sp[0])
 
         if peak_centroid:
-            plt.stem(self.peak_list[path]['mzs'], self.peak_list[path]['intensity'],
+            mzs = self.peak_list[path]['mzs']
+            intens = self.peak_list[path]['intensity']
+            plt.stem(mzs[(mzs>mz_low)&(mzs<mz_high)], intens[(mzs>mz_low)&(mzs<mz_high)],
              markerfmt=' ', basefmt=' ', linefmt='r')
         plt.show()
