@@ -18,6 +18,9 @@ dependencies:
   - numpy==1.19.2
   - requests
   - ipywidgets
+  - scikit-image
+  - opencv
+  - imagecodecs
   - pip:
     - torch==1.7.1
     - spike-py
