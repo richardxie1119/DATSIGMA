@@ -107,24 +107,24 @@ class microMSData():
 		return cropped_imgs, integrated_intens, mean_intens, coord_list, radius, names
 
 
-	def select_micromsIntens(self, channel1, channel2, thres1=(0,1.0,0.01), thres2=(0,1.0,0.01)):
+	def select_micromsIntens(self, channel1, channel2, thres1=widgets.IntRangeSlider(value=(25, 75), min=0, max=100, step=1), thres2=widgets.IntRangeSlider(value=(25, 75), min=0, max=100, step=1)):
     
-		#fig = plt.figure(figsize=(4,4))
-
 		x = np.array(self.obs['integrated_intens_'+channel1])
 		y = np.array(self.obs['integrated_intens_'+channel2])
+        
+		thres1 = tuple(i/100 for i in thres1)
+		thres2 = tuple(i/100 for i in thres2)
 
 		self.obs['use'] = False
-		use_index = (x>thres1*x.max()) &  (y>thres2*y.max())
+		use_index = (thres1[0]*x.max()<=x) & (x<thres1[1]*x.max()) & (thres2[0]*y.max()<=y) & (y<thres2[1]*y.max())
 		self.obs['use'].iloc[use_index] = True
 
 		gs=sns.jointplot(x='integrated_intens_'+channel1,y='integrated_intens_'+channel2,
 			hue='use',data=self.obs,edgecolors='k',s=10, height=4)
-		gs.ax_joint.axvline(thres1*x.max(), color='r', linestyle='-')
-		gs.ax_joint.axhline(thres2*y.max(), color='r', linestyle='-')
-
-
-		#gs.scatterplot(x_selected,y_selected,color='red',ax=gs)
+		gs.ax_joint.axvline(thres1[0]*x.max(), color='r', linestyle='-')
+		gs.ax_joint.axvline(thres1[1]*x.max(), color='r', linestyle='-')
+		gs.ax_joint.axhline(thres2[0]*y.max(), color='b', linestyle='-')
+		gs.ax_joint.axhline(thres2[1]*y.max(), color='b', linestyle='-')
 
 		gs.set_axis_labels(channel1.capitalize(),channel2.capitalize())
 
