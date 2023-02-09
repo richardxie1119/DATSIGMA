@@ -21,6 +21,7 @@ dependencies:
   - scikit-image
   - opencv
   - imagecodecs
+  - leidenalg
   - pip:
     - torch==1.7.1
     - spike-py
