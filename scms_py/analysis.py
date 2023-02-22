@@ -281,6 +281,82 @@ class scMSAnalysis():
 
         plt.show()
 
+    def show_volcano(self, channel1,fold_thresh=widgets.IntSlider(value=5, min=0, max=10, step=0.1), p_thresh=widgets.IntSlider(value=5, min=0, max=10, step=0.1)):
+        '''Richard: here, channel1 needs to be = microms.obs['use']. I guess this should ideally be similar to the selectmicroms_intens where you can upload a list of 
+        avaliable selection criteria (microms filter, ground truth dataframe, clustering results, etc. The first set of code will need to be changed to reflect this 
+        better (getting indicies for each...). Additionally, I'm not entirely sure how the logfoldchanges list works, so you will need to select the necessary values 
+        for that and the pvals. Other than that, I believe I updated everything else here. '''
+        
+        
+        #Ignoring a slicing error I get from pandas
+        import warnings
+        from pandas.core.common import SettingWithCopyWarning
+        warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
+
+        #Getting indices for each sample type and adding to a list
+        group1 = []
+        group2 = []
+        for i in range(len(channel1)):
+            if channel1[i] == True:
+                group1.append(i)
+            elif channel1[i] == False:
+                group2.append(i)
+
+        #Selecting the data for each of the two groups
+        dataset1 = self.intens_mtx.iloc[:,group1]
+        dataset2 = self.intens_mtx.iloc[:,group2]
+
+        #Averaging the intensities for each dataset
+        dataset1 = np.mean(dataset1, axis=0)
+        dataset2 = np.mean(dataset2, axis=0)
+
+        #Creating a dataframe and calculating 
+        volcano_df = pd.DataFrame()
+
+        # Define the threshold values for fold change and p-value
+        fc_threshold = log_thresh  # fold change threshold
+        pval_threshold = fold_thresh  # p-value threshold
+
+        logfold = self.adata.uns['rank_genes_groups']['logfoldchanges']
+        pvalue = self.adata.uns['rank_genes_groups']['pvals_adj']
+        
+        # Add a column to the DataFrame that indicates if the values are acceptable
+        volcano_df['acceptable1'] = (abs(logfold) >= fc_threshold) & (pvalue >= pval_threshold)
+        volcano_df['acceptable2'] = ((logfold) >= fc_threshold) & (pvalue >= pval_threshold)
+        volcano_df['acceptable3'] = ((logfold) <= -fc_threshold) & (pvalue >= pval_threshold)
+
+        volcano_df['color'] = volcano_df['acceptable1']
+
+        volcano_df['color'][volcano_df['acceptable1'] == False] = 'grey'
+        volcano_df['color'][volcano_df['acceptable2'] == True] = '#1f77b4'
+        volcano_df['color'][volcano_df['acceptable3'] == True] = 'red'
+
+        # Create the volcano plot
+        fig, ax = plt.subplots()
+        colors = ['#1f77b4', 'grey', 'red']
+        labels = ['Up', 'Not Sig', 'Down']
+        for i in range(3):
+            plot_index = volcano_df['color'].index[volcano_df['color']==colors[i]]
+            ax.scatter(logfold[plot_index], pvalue[plot_index], c=colors[i], alpha=0.8, label=labels[i])
+
+        # Add horizontal and vertical lines for the threshold values
+        ax.axhline(pval_threshold, color='black', linestyle='--')
+        ax.axvline(fc_threshold, color='black', linestyle='--')
+        ax.axvline(-1 * fc_threshold, color='black', linestyle='--')
+
+        # Set the plot title and axis labels
+        #ax.set_title('3701 vs 3701D')
+        ax.set_xlabel('Log2 Fold Change')
+        ax.set_ylabel('-Log10 P-Value')
+
+        ratio = 0.7
+        x_left, x_right = ax.get_xlim()
+        y_low, y_high = ax.get_ylim()
+        ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
+        ax.set_axisbelow(True)
+        ax.grid()
+        ax.legend()
+        plt.show()
 
 
     def LipidMaps_annotate(mass_list, adducts, tolerance, site_url):
