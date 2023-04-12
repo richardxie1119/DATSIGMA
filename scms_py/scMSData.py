@@ -13,7 +13,7 @@ import random
 from joblib import Parallel, delayed
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
-from scipy.stats import median_absolute_deviation as mad
+from scipy.stats import median_abs_deviation as mad
 import matplotlib.pyplot as plt
 
 
@@ -147,10 +147,11 @@ class scMSData():
 
     def getICRSpectra(self, path, mz_range):
 
-        params, fid = self.loadICRData(path)
+        #params, fid = self.loadICRData(path)
+        D = proc_solarix(path)
 
-        if fid.size >0:
-            mz, sp = fid2spec(fid, params['m'], mz_range)
+        if D.axis1.mz_axis().size >0:
+            mz, sp = fid2spec_solarix(D, mz_range)
         else:
             mz = np.array([])
             sp = np.array([])
@@ -169,8 +170,8 @@ class scMSData():
 
             if sp.size > 0:
                 if return_peak:
-                    MAD = mad(sp[0])
-                    peak_list = peak_detection(mz, sp[0], prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+                    MAD = mad(sp)
+                    peak_list = peak_detection(mz, sp, prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
 
                     self.peak_list[path] = peak_list
                     self.names.append(path)
@@ -187,8 +188,8 @@ class scMSData():
 
             if sp.size > 0:
                 if return_peak:
-                    MAD = mad(sp[0])
-                    peak_list = peak_detection(mz, sp[0], prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+                    MAD = mad(sp)
+                    peak_list = peak_detection(mz, sp, prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
 
                     self.peak_list[path] = peak_list
                     self.names.append(path)
@@ -200,7 +201,7 @@ class scMSData():
 
         plt.figure(figsize=(8,4))
         mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high))
-        plt.plot(mz, sp[0])
+        plt.plot(mz, sp)
 
         if peak_centroid:
             mzs = self.peak_list[path]['mzs']

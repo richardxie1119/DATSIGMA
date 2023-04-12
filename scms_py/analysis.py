@@ -16,6 +16,9 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.extmath import randomized_svd
 
+import requests
+import io
+from tqdm import tqdm
 
 
 class scMSAnalysis():
@@ -32,8 +35,8 @@ class scMSAnalysis():
 
         """
         """
-        intens_mtx = intens_mtx.iloc[:,intens_mtx.astype(bool).sum(axis=0).values>feat_drop_rate*intens_mtx.shape[0]]
-        intens_mtx = intens_mtx.iloc[intens_mtx.astype(bool).sum(axis=1).values>cell_drop_rate*intens_mtx.shape[1],:]
+        intens_mtx = intens_mtx.iloc[:,intens_mtx.astype(bool).sum(axis=0).values>=feat_drop_rate*intens_mtx.shape[0]]
+        intens_mtx = intens_mtx.iloc[intens_mtx.astype(bool).sum(axis=1).values>=cell_drop_rate*intens_mtx.shape[1],:]
 
         if norm_method == None:
             intens_mtx = intens_mtx
@@ -70,6 +73,8 @@ class scMSAnalysis():
 
         if self.metadata is not None:
             self.metadata = self.metadata.loc[self.intens_mtx.index]
+        else:
+            self.metadata = pd.DataFrame(index = self.intens_mtx.index)
 
         self.adata = anndata.AnnData(self.intens_mtx)
         self.adata.var['mz'] = self.intens_mtx.columns.astype(str)
@@ -92,7 +97,7 @@ class scMSAnalysis():
             if self.metadata[label].values.dtype == int:
                 self.metadata[label] = self.metadata[label].astype(str)
 
-            self.adata.obs[label] = self.metadata[label]
+            self.adata.obs[label] = self.metadata[label].values
 
 
 
@@ -112,7 +117,7 @@ class scMSAnalysis():
 
         print('performing clustering...')
         sc.tl.leiden(self.adata, resolution=resolution)
-        self.metadata['leiden'] = self.adata.obs['leiden']
+        self.metadata['leiden'] = self.adata.obs['leiden'].values
 
         if labels != None:
             print('supervised umap...')
@@ -205,7 +210,7 @@ class scMSAnalysis():
 
 
 
-    def show_cellEmbed(self, label, embed_method, size):
+    def show_cellEmbed(self, label, embed_method, size, rasterized=False):
 
         labels = self.adata.obs[label].values
         labels_unique = list(set(labels))
@@ -216,9 +221,9 @@ class scMSAnalysis():
         embedding = self.adata.obsm[embed_method]
 
         plt.close()
-        fig, ax = plt.subplots(1, figsize=(5, 4))
+        fig, ax = plt.subplots(1, figsize=(5, 4),dpi=300)
 
-        plt.scatter(embedding[:,0],embedding[:,1], s=size, c=labels_num, cmap='rainbow', alpha=1)
+        plt.scatter(embedding[:,0],embedding[:,1], s=size, c=labels_num, cmap='rainbow', alpha=1, rasterized=rasterized)
         plt.setp(ax, xticks=[], yticks=[])
         cbar = plt.colorbar(boundaries=np.arange(len(labels_unique)+1)-0.5)
         cbar.set_ticks(np.arange(len(labels_unique)))
@@ -283,29 +288,34 @@ class scMSAnalysis():
 
 
 
-    def LipidMaps_annotate(mass_list, adducts, tolerance, site_url):
-        
-        Data = []
-        matched = []
-        unmatched = []
-        
-        for mass in mass_list:
-            Data_ = []
-            for adduct in adducts:
-                url = site_url+'/{}/{}/{}'.format(mass,adduct,tolerance)
-                
-                urlData = requests.get(url).content.decode('utf-8')[7:-9]            
-                rawData = pd.read_csv(io.StringIO(urlData),sep='\t',error_bad_lines=False,index_col=False)
-                
-                Data_.append(rawData)
-                Data.append(rawData)
-            df = pd.concat(Data_, ignore_index=True)
+def LipidMaps_annotate(mass_list,adducts,ppm,site_url):
+    
+    Data = []
+    matched = []
+    unmatched = []
+
+    for i in tqdm(range(len(mass_list))):
+        mass = float(mass_list[i])
+        tolerance = ppm*1e-6*mass
+        Data_ = []
+        for adduct in adducts:
+            url = site_url+'/{}/{}/{}'.format(mass,adduct,tolerance)
             
-            if df.empty:
-                unmatched.append(mass)
-            else:
-                matched.append(mass) 
-                
-        annot_df = pd.concat(Data, ignore_index=True)
-        return annot_df, matched, unmatched
+            urlData = requests.get(url).content.decode('utf-8')[7:-9]            
+            rawData = pd.read_csv(io.StringIO(urlData),sep='\t',error_bad_lines=False,index_col=False)
+            
+            Data_.append(rawData)
+            #Data.append(rawData)
+        df = pd.concat(Data_, ignore_index=True)
+        df['Input m/z'] = [mass]*df.shape[0]
+        
+        if df.empty:
+            unmatched.append(mass)
+        else:
+            matched.append(mass) 
+            Data.append(df)
+            
+    annot_df = pd.concat(Data, ignore_index=True)
+    return annot_df, matched, unmatched
+
 

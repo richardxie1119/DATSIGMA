@@ -3,6 +3,7 @@ from scipy.io import loadmat
 import numpy as np
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
+import re
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
 import os
@@ -43,7 +44,6 @@ def loadBrukerFIDs(file_path, fid_length, read_length, fid_idx, verbose = False)
         f.close()
 
     return np.array(fids,dtype='float64')
-
 
 
 def parseBrukerMethod(file_path):
@@ -105,6 +105,55 @@ def parseBrukerXML_tof(file_path, detailed = False):
             snr.append(float(type_tag.findall('s2n')[0].text))
         
     return {'intensity':np.array(intensity),'mzs':np.array(mzs),'res':np.array(res),'snr':np.array(snr)}
+
+
+def parseImagingInfo(file_path):
+
+    """parses the ImagingInfo.xml file in the imaging .d folder, and returns the relative
+    coordinates for each imaged regions, starting with RXX. The parsed dictionary contains
+    the arrays of relative coordinates Xs and Ys under keys named as the regions (RXX).
+
+    """
+
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+
+    parsed_spots = {}
+    spotNames = []
+    scan = []
+    TIC = []
+    for child in root:
+        spotNames.append(child.find('spotName').text)
+        scan.append(child.find('count').text)
+        TIC.append(child.find('tic').text)
+
+    ROI = set([spot[:3] for spot in spotNames])
+
+    for roi in ROI:
+
+        coord = []
+        scan_idx = []
+        tic = []
+
+        for i in range(len(spotNames)):
+            spot = spotNames[i]
+
+            if roi in spot:
+                coord.append([int(re.search('X(.*)Y' ,spot).group(1)),
+                int(re.search('Y(.*)' ,spot).group(1))])
+                scan_idx.append(scan[i])
+                tic.append(TIC[i])
+                
+        scan_idx = np.array(scan_idx, dtype='int64')
+        tic = np.array(tic, dtype='float')
+
+        coord = np.array(coord)
+        coord[:,0] -= coord[:,0].min()
+        coord[:,1] -= coord[:,1].min()
+
+        parsed_spots[roi] = {'coordinates':coord, 'scan_index':scan_idx, 'tic':tic}
+
+    return parsed_spots
 
 
 def loadmatfile(file_dir):
