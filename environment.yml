@@ -15,7 +15,7 @@ dependencies:
   - scipy
   - scikit-learn
   - tqdm
-  - numpy
+  - numpy==1.23.5
   - requests
   - ipywidgets
   - scikit-image
