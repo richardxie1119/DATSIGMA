@@ -12,17 +12,17 @@ dependencies:
   - seaborn
   - numpy
   - pip
-  - scipy==1.6.2
-  - scikit-learn==1.1.2 
+  - scipy
+  - scikit-learn
   - tqdm
-  - numpy==1.19.2
+  - numpy
   - requests
   - ipywidgets
   - scikit-image
   - opencv
   - imagecodecs
   - leidenalg
-  - scanpy==1.8.1
+  - scanpy
   - pip:
     - torch==1.7.1
     - spike-py
