@@ -22,6 +22,7 @@ dependencies:
   - opencv
   - imagecodecs
   - leidenalg
+  - scanpy==1.8.1
   - pip:
     - torch==1.7.1
     - spike-py
@@ -31,4 +32,3 @@ dependencies:
     - anndata
     - xgboost
     - shap
-    - scanpy==1.8.1
