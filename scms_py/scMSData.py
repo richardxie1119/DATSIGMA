@@ -16,6 +16,8 @@ from pyImagingMSpec.inMemoryIMS import inMemoryIMS
 from scipy.stats import median_abs_deviation as mad
 import matplotlib.pyplot as plt
 
+import warnings
+warnings.filterwarnings("ignore")
 
 class scMSData():
 
@@ -126,7 +128,7 @@ class scMSData():
         return {'parameters':parameters,'T':T,'t':t,'f':f,'m':m}
 
 
-    def loadICRData(self, path, method_file_path=None):
+    def loadICRData(self, path, method_file_path=None, idx=1):
         """
         """
         for root, dirs, files in os.walk(path):
@@ -140,15 +142,19 @@ class scMSData():
             fid = np.array([])
         else: 
             params = self.getParams(method_file_path)
-            fid = loadBrukerFIDs(path+'/ser', params['parameters']['TD'],'all', 1)
+            fid = loadBrukerFIDs(path+'/ser', params['parameters']['TD'],'all', idx)
 
         return params, fid
 
 
-    def getICRSpectra(self, path, mz_range):
+    def getICRSpectra(self, path, mz_range, temp_path=None, idx=1, multiple=False):
 
         #params, fid = self.loadICRData(path)
-        D = proc_solarix(path)
+        if multiple:
+            params, fid = self.loadICRData(path, idx=idx)
+            D = proc_solarix_imaging(temp_path, fid[0])
+        else:
+            D = proc_solarix(path)
 
         if D.axis1.mz_axis().size >0:
             mz, sp = fid2spec_solarix(D, mz_range)
@@ -157,6 +163,7 @@ class scMSData():
             sp = np.array([])
 
         return mz, sp
+
 
 
     def processICRData_solarix(self, paths, mz_range, thres, centroid):
@@ -177,30 +184,47 @@ class scMSData():
                     self.names.append(path)
 
 
-    def processICRData(self, paths, mz_range, return_peak = True, prominence_multiplier = 5, thres_multipier = 5):
+    def processICRData(self, paths, mz_range, return_peak = True, prominence_multiplier = 5, thres_multipier = 5, multiple=False, temp_path=None):
         """
         """
         self.names = []
 
         for i in tqdm(range(len(paths))):
             path = paths[i]
-            mz, sp = self.getICRSpectra(path, mz_range)
+            if multiple:
+                params, fid = self.loadICRData(path, idx=1)
+                total_fid = len(np.fromfile(path+'/ser', dtype = 'int32')) # this needs to be updated to avoid loading the whole file. how to check length for ser file?
+                fid_number = int(total_fid/params['parameters']['TD']+1)
+                fid_idx = list(range(1,fid_number))
+                for idx in tqdm(fid_idx):
+                    mz, sp = self.getICRSpectra(path, mz_range, temp_path, idx, multiple)
 
-            if sp.size > 0:
-                if return_peak:
-                    MAD = mad(sp)
-                    peak_list = peak_detection(mz, sp, prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+                    if sp.size > 0:
+                        if return_peak:
+                            MAD = mad(sp)
+                            peak_list = peak_detection(mz, sp, prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
 
-                    self.peak_list[path] = peak_list
-                    self.names.append(path)
+                            self.peak_list[path+str(idx)] = peak_list
+                            self.names.append(path+str(idx))
+
+            else:
+                mz, sp = self.getICRSpectra(path, mz_range)
+
+                if sp.size > 0:
+                    if return_peak:
+                        MAD = mad(sp)
+                        peak_list = peak_detection(mz, sp, prominence = MAD*prominence_multiplier, threshold = MAD*thres_multipier)
+
+                        self.peak_list[path] = peak_list
+                        self.names.append(path)
 
 
-    def show_ICRSpectra(self, path, mz_low, mz_high, peak_centroid = True):
+    def show_ICRSpectra(self, path, mz_low, mz_high, peak_centroid = True, temp_path=None, idx=1, multiple=False):
 
         plt.close()
 
         plt.figure(figsize=(8,4))
-        mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high))
+        mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high),temp_path=temp_path, idx=idx, multiple=multiple)
         plt.plot(mz, sp)
 
         if peak_centroid:

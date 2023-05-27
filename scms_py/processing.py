@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.signal as sig
 import scipy.stats as stats
-from scipy.stats import median_absolute_deviation as mad
+from scipy.stats import median_abs_deviation as mad
 import pickle
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
@@ -32,8 +32,8 @@ import os
 
 def proc_solarix(path, zerofill=False):
 
-    if os.path.isfile(path+'/ser'):
-        os.ren
+    # if os.path.isfile(path+'/ser'):
+    #     os.ren
 
 
     D1 = Solarix.Import_1D(path)     # Import_1D creates a SPIKE FTICRData object, from which everything is available
@@ -52,6 +52,29 @@ def proc_solarix(path, zerofill=False):
 
     return D1
 
+
+def proc_solarix_imaging(path, fid, apodize = True, flatten = False, zerofill=False):
+
+    D1 = Solarix.Import_1D(path)     # Import_1D creates a SPIKE FTICRData object, from which everything is available
+    #D1 = d1.copy() 
+    D1.buffer = fid
+    D1.center()
+    if apodize:
+        #D1.kaizer(4)
+        D1.hamming()   # chaining  centering - apodisation - zerofill
+    if zerofill:
+        D1.zf(4)
+                                  # kaiser(4) is an apodisation well adapted to FTICR, slightly more resolution than hamming - try varying the argument !
+    if D1.axis1.itype == 0:       # means data is real (common case)
+        D1.rfft().modulus()           # chaining  real FT - modulus
+    else:                         #       data is complex, in Narrow-band acquisition
+        D1.fft().modulus()            # chaining  complex FT - modulus
+    if flatten:
+        D1.bcorr(xpoints=50)          # flatten the baseline
+
+    D1.set_unit('m/z')
+
+    return D1
 
 def fid2spec_solarix(D, mz_range):
 
