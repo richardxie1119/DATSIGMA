@@ -219,12 +219,12 @@ class scMSData():
                         self.names.append(path)
 
 
-    def show_ICRSpectra(self, path, mz_low, mz_high, peak_centroid = True, temp_path=None, idx=1, multiple=False):
+    def show_ICRSpectra(self,path, mz_low, mz_high, peak_centroid = True):
 
         plt.close()
 
         plt.figure(figsize=(8,4))
-        mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high),temp_path=temp_path, idx=idx, multiple=multiple)
+        mz, sp = self.getICRSpectra(path,mz_range=(mz_low,mz_high),temp_path=None, idx=1, multiple=False)
         plt.plot(mz, sp)
 
         if peak_centroid:
@@ -233,3 +233,5 @@ class scMSData():
             plt.stem(mzs[(mzs>mz_low)&(mzs<mz_high)], intens[(mzs>mz_low)&(mzs<mz_high)],
              markerfmt=' ', basefmt=' ', linefmt='r')
         plt.show()
+
+        return mz,sp

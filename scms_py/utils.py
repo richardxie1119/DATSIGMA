@@ -7,7 +7,7 @@ import re
 from pyimzml.ImzMLWriter import ImzMLWriter
 from pyImagingMSpec.inMemoryIMS import inMemoryIMS
 import os
-
+from glob import glob
 
 def loadBrukerFIDs(file_path, fid_length, read_length, fid_idx, verbose = False):
     """
@@ -65,6 +65,23 @@ def parseBrukerMethod(file_path):
             ML3 = float(type_tag.findall('value')[0].text)
 
     return {'SW_h':SW_h,'TD':TD,'ML1':ML1,'ML2':ML2,'ML3':ML3}
+
+
+def get_cell_fid_path(dir, sub_dir=None):
+    
+    cell_ser_file_dir = []
+    if sub_dir:
+        for cell_file_dir_ in sub_dir:
+            cell_ser_file_dir += glob(dir+cell_file_dir_+'/*.d')
+    else:
+        cell_ser_file_dir += glob(dir+'*.d')
+    
+    for path in cell_ser_file_dir:
+        if not os.path.isfile(path+'/fid'):
+            os.rename(path+'/ser', path+'/fid')
+    
+    return cell_ser_file_dir
+
 
 
 def parseBrukerXML(file_path, detailed = False):

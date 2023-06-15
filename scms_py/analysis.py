@@ -10,11 +10,12 @@ from scipy.stats import spearmanr, ttest_ind
 import seaborn as sns
 import anndata
 import scanpy as sc
-import umap
+#import umap
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.extmath import randomized_svd
+import ipywidgets as widgets
 
 import requests
 import io
