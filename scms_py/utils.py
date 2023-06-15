@@ -190,7 +190,7 @@ def loadmatfile(file_dir):
     
     return intens_df
 
-def pklist2imzML(peak_list, file_name, coords):
+def pklist2imzML(peak_list, file_name, coords, cell_names):
 
     """
     """
@@ -205,7 +205,9 @@ def pklist2imzML(peak_list, file_name, coords):
                 w.addSpectrum(mzs = peak_list[key]['mzs'],intensities = peak_list[key]['intensity'],
                                         coords = coords[idx])
             idx += 1
-    
+
+    pd.DataFrame(index=cell_names).to_csv(file_name+'.csv')
+
     print('succefully parsed the peak list to imzml!')
 
 

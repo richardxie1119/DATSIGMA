@@ -101,7 +101,8 @@ class scMSData():
     
     def loadimzMLData(self, file_name):
 
-        self.imzML_dataset = inMemoryIMS(file_name)
+        self.imzML_dataset = inMemoryIMS(file_name+'.imzml')
+        self.names = pd.read_csv(file_name+'.csv', index_col=0).index
 
 
     def convertPeak2imzML(self, file_name):
@@ -109,9 +110,9 @@ class scMSData():
         """
 
         coords = [tuple([1,i]) for i in range(len(self.names))]
-        pklist2imzML(self.peak_list, file_name, coords)
+        pklist2imzML(self.peak_list, file_name, coords, self.names)
 
-        self.loadimzMLData(file_name+'.imzML')
+        self.loadimzMLData(file_name)
 
 
     def getParams(self, method_file_path):
